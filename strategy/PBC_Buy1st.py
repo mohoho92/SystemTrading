@@ -6,48 +6,58 @@ from util.notifier import *
 import math
 import traceback
 import logging
+import os
+import csv
 
 class PBC_Buy1st (QThread):
-    def __init__(self):
+    def __init__(self, parent):
+        super().__init__(parent)
         QThread.__init__(self)
+        self.parent = parent
+
         self.strategy_name = "PBC_Buy1st"
         self.kiwoom = Kiwoom()
 
         self.logger = logging.getLogger(name='PBC_Buy1st')
-        self.logger.setLevel(logging.DEBUG)
-        print(self.logger)
-
-        formatter = logging.Formatter('|%(asctime)s||%(name)s||%(levelname)s| %(message)s', datefmt='%Y-%m-%d %H:%M:%S') 
-
-        if self.logger.hasHandlers():            ## 핸들러 존재 여부    
-            self.logger.handlers.clear()         ## 핸들러 삭제
-
-    #    stream_handler = logging.StreamHandler()    ## 스트림 핸들러 생성
-    #    stream_handler.setFormatter(formatter)      ## 텍스트 포맷 설정
-    #    logger.addHandler(stream_handler)           ## 핸들러 등록
-
-        file_handler = logging.FileHandler('test.log', mode='w')  ## 파일 핸들러 생성  mode='a'
-        file_handler.setFormatter(formatter)            ## 텍스트 포맷 설정
-        self.logger.addHandler(file_handler)                 ## 핸들러 등록
+        self._init_logger()
 
         #for i in range(1, 6):
         #    logger.info(f'{i} 번째 접속')
 
-        # 주문할 ticker를 담을 딕셔너리
-        self.target_items = [
-            {
-            '종목코드' : "083450",
-            'is시가Down'     : False,    #시가 아래로 내려가면 True   ## 확실하게 하기 위해 -1% 이하로 떨어졌다가 올라올때 True
-            '주문수량'       : 10,       # 10주, 살수 있는 가격으로 나중에 계산 필요.
-            '매수금액'       : 2000000,  # 매수 금액이 필요할 수 있다.  
-            'CntAfterOrder'    : 0,        # 매수 후 채결정보 받은 cnt,  매수후 바로 팔지 않도록 사용할 수 있음. 
-            'is시가UpAgain'     : False,    #시가 아래로 갔다 올라오면 True
-            '목표수익율'        : 2,        # 2% 수익나면 익절 
-            '매수시현재가'       : 0,     # 매수 가격
-            '매수시저가'        : 0,     # 매수시점 저점 가격 저장으로 매도시 사용 함.
-            '체결수신Cnt'       : 0,     # 체결정보 수신 Cnt
-            },
-            ]
+        print('current directory:',os.getcwd())
+        self.target_items = []
+ 
+        with open('./pbc_1st_sample.csv','r') as f:
+            target_item = {
+                '종목코드' : "083450",
+                'is시가Down'     : False,    #시가 아래로 내려가면 True   ## 확실하게 하기 위해 -1% 이하로 떨어졌다가 올라올때 True
+                '주문수량'       : 10,       # 10주, 살수 있는 가격으로 나중에 계산 필요.
+                '매수금액'       : 1000000,  # 매수 금액이 필요할 수 있다.  
+                'CntAfterOrder'    : 0,        # 매수 후 채결정보 받은 cnt,  매수후 바로 팔지 않도록 사용할 수 있음. 
+                'is시가UpAgain'     : False,    #시가 아래로 갔다 올라오면 True
+                '목표수익율'        : 2,        # 2% 수익나면 익절 
+                '매수시현재가'       : 0,     # 매수 가격
+                '매수시저가'        : 0,     # 매수시점 저점 가격 저장으로 매도시 사용 함.
+                '체결수신Cnt'       : 0,     # 체결정보 수신 Cnt
+                }
+        
+            reader = csv.DictReader(f)
+            for row in reader:
+                print ("code", row['종목코드'])
+                ti = target_item.copy()
+
+                ti['종목코드'] = row['종목코드']
+                
+                if row['종목코드']:
+                    ti['종목코드'] = ti['종목코드'][1:]     #csv파리에서 읽으면. `000020 으로 읽어져 `을빼고 저장. 
+                    self.target_items.append(ti)
+        import pprint
+        pprint.pprint({ 'self.target_items' : self.target_items})
+        # self.target_items[3]
+        #quit(0)
+
+
+        # 주문할 ticker를 담을딕셔너리
         
         self.logger.info('Target Items')
         for item in self.target_items:
@@ -65,6 +75,26 @@ class PBC_Buy1st (QThread):
 
         self.init_strategy()
 
+    """ 
+        init logger
+    """
+    def _init_logger(self):
+        
+        self.logger.setLevel(logging.DEBUG)
+        print(self.logger)
+
+        formatter = logging.Formatter('|%(asctime)s||%(name)s||%(levelname)s| %(message)s', datefmt='%Y-%m-%d %H:%M:%S') 
+
+        if self.logger.hasHandlers():            ## 핸들러 존재 여부    
+            self.logger.handlers.clear()         ## 핸들러 삭제
+
+    #    stream_handler = logging.StreamHandler()    ## 스트림 핸들러 생성
+    #    stream_handler.setFormatter(formatter)      ## 텍스트 포맷 설정
+    #    logger.addHandler(stream_handler)           ## 핸들러 등록
+            
+        file_handler = logging.FileHandler('PBC_Buy1st.log', mode='w')  ## 파일 핸들러 생성  mode='a'
+        file_handler.setFormatter(formatter)            ## 텍스트 포맷 설정
+        self.logger.addHandler(file_handler)                 ## 핸들러 등록
 
     def init_strategy(self):
         """전략 초기화 기능을 수행하는 함수"""
@@ -132,6 +162,10 @@ class PBC_Buy1st (QThread):
                     # time.sleep(1 * 60)
                     # continue
 
+                if check_order_wait_closed():                   # if not for test
+                    print("3시까지 매도가 안되었으면 매도한다.")
+                    self.all_order_sell()
+
                 for item in self.target_items:
                     #print (code)
                     code = item['종목코드']
@@ -165,10 +199,20 @@ class PBC_Buy1st (QThread):
                         self.check_buy_signal_and_order(code,item)
 
                     time.sleep(0.3)
+                    # Kiwoon.py  에서 받은 json 의 값을 하나하나씩 적용하는 것만 여기 추가하면 됨
+                    # 우리가 수행할때는 --localtest 일 경우 이 내용이 수행되게 하면 좋을 것임.
             except Exception as e:
                 print(traceback.format_exc())
                 # telegram 메시지를 보내는 부분
                 send_message_bot(traceback.format_exc(), 0)
+
+    def all_order_sell(self):
+        """ 보유 종목 전체 매도 함수"""
+        for item in self.target_items:
+            code = item['종목코드']
+            print ("all_order_sell", code)
+            if code in self.kiwoom.balance.keys():
+                self.order_sell(code)
 
     def check_sell_signal(self, code, item):
         """매도대상인지 확인하는 함수"""
